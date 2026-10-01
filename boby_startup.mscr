@@ -1,0 +1,5 @@
+# Boby Audio startup helper
+# Launched by the existing autorunce.mscr
+If ( FileExists("\\My Flash Disk\\BobyAudio.exe") )
+    Run("\\My Flash Disk\\BobyAudio.exe")
+EndIf
