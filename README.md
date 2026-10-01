@@ -1,29 +1,30 @@
 # Boby Audio for VW Maps & More
 
-Small Windows CE/ARM helper for the original VW/Garmin Maps & More system.
+Windows CE/ARM helper for the original VW/Garmin Maps & More system.
 
-The helper does **not** launch MediaPlayer.exe directly and does **not** emulate touch input.
-It loads the original `ACAppCom.dll` and asks AppCom to start the registered
-`MMPMediaPlayer` application through the same application-management layer used by
-the VW shell.
+## Verified AppCom behavior
 
-## Test version 0.1
+The helper must be stored and launched from:
 
-This first build intentionally does only one thing:
+`\\My Flash Disk\\VwUserShell\\BobyAudio.exe`
 
-1. wait for `VwUserShell`
-2. wait a little longer for Bluetooth/A2DP reconnect
-3. call AppCom `StartApplication("MMPMediaPlayer", "", true)`
-4. verify the foreground application through AppCom
-5. write diagnostics to `\\My Flash Disk\\boby_audio.log`
+This is required because AppCom only sees the stock application registry (`NgAppCom.xml`) correctly in the VwUserShell context.
 
-Standby/resume handling will only be added after this launch path is verified on the device.
+Version 0.3:
 
-## Device install for the test
+1. waits for the original VW shell
+2. loads the stock `ACAppCom.dll`
+3. waits for the stock Bluetooth application
+4. calls AppCom `StartApplication("MMPMediaPlayer", "", true)`
+5. retries until the stock media player is running/foreground
+6. does not emulate touch and does not send a fake Play command
 
-Copy these two files from the GitHub Actions artifact to the root of the Garmin:
+The existing `autorunce.mscr` should launch:
 
-- `BobyAudio.exe`
-- `boby_startup.mscr`
+`Run("\\My Flash Disk\\VwUserShell\\BobyAudio.exe")`
 
-The existing `autorunce.mscr` already launches `boby_startup.mscr`.
+Diagnostics are written to:
+
+`\\My Flash Disk\\boby_audio.log`
+
+Standby/resume handling is the next step after the cold-start path is confirmed.
