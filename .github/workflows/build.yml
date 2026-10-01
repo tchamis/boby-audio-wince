@@ -1,0 +1,43 @@
+name: Build BobyAudio for Windows CE ARM
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/enlyze/windows-ce-build-environment-arm:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          arm-mingw32ce-g++ --version
+          arm-mingw32ce-objdump --version
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          arm-mingw32ce-g++ \
+            -Os -s -static \
+            -march=armv5tej -mcpu=arm926ej-s \
+            -mwindows \
+            -Wall -Wextra \
+            -o dist/BobyAudio.exe BobyAudio.cpp
+          cp boby_startup.mscr dist/boby_startup.mscr
+
+      - name: Inspect PE
+        run: |
+          file dist/BobyAudio.exe || true
+          arm-mingw32ce-objdump -f -p dist/BobyAudio.exe | head -n 120
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: boby-audio-wince-arm
+          path: dist/
