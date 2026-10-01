@@ -70,8 +70,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
     // the original player starts playback itself after being opened.
     Sleep(12000);
 
-    SetCurrentDirectory(L"\\My Flash Disk\\VwUserShell");
-
     HMODULE appCom = LoadLibrary(kDllPath);
     if (!appCom) {
         Log("ERROR: LoadLibrary ACAppCom.dll failed");
