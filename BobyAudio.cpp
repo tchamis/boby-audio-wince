@@ -20,15 +20,10 @@ static void Log(const char* text)
 {
     HANDLE h = CreateFile(kLogPath, GENERIC_WRITE, FILE_SHARE_READ, 0,
                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-    if (h == INVALID_HANDLE_VALUE)
-        return;
+    if (h == INVALID_HANDLE_VALUE) return;
 
     SetFilePointer(h, 0, 0, FILE_END);
-
-    DWORD len = 0;
-    while (text[len] != 0)
-        ++len;
-
+    DWORD len = 0; while (text[len] != 0) ++len;
     DWORD written = 0;
     WriteFile(h, text, len, &written, 0);
     WriteFile(h, "\r\n", 2, &written, 0);
@@ -37,33 +32,51 @@ static void Log(const char* text)
 
 static void LogBool(const char* prefix, bool value)
 {
-    char line[160];
-    int p = 0;
-
-    while (prefix[p] && p < 140)
-        line[p] = prefix[p], ++p;
-
+    char line[180]; int p = 0;
+    while (prefix[p] && p < 150) { line[p] = prefix[p]; ++p; }
     const char* v = value ? "TRUE" : "FALSE";
-    int i = 0;
-    while (v[i] && p < 150)
-        line[p++] = v[i++];
-
-    line[p] = 0;
-    Log(line);
+    int i = 0; while (v[i] && p < 170) line[p++] = v[i++];
+    line[p] = 0; Log(line);
 }
 
-static bool IsPlayerForeground(GetForegroundApplicationFn fn)
+static void LogInt(const char* prefix, int value)
 {
-    if (!fn)
-        return false;
+    char line[180]; int p=0;
+    while (prefix[p] && p < 140) { line[p]=prefix[p]; ++p; }
+    char tmp[32]; int n=0;
+    if (value==0) tmp[n++]='0';
+    else {
+        if (value<0) { line[p++]='-'; value=-value; }
+        char rev[32]; int r=0;
+        while(value>0 && r<30){ rev[r++]=(char)('0'+(value%10)); value/=10; }
+        while(r>0) tmp[n++]=rev[--r];
+    }
+    for(int i=0;i<n && p<170;++i) line[p++]=tmp[i];
+    line[p]=0; Log(line);
+}
 
-    wchar_t name[128];
-    ZeroMemory(name, sizeof(name));
+static void LogWide(const char* prefix, const wchar_t* value)
+{
+    char line[300]; int p=0;
+    while(prefix[p] && p<220){ line[p]=prefix[p]; ++p; }
+    if (!value) {
+        const char* n="<null>"; int i=0;
+        while(n[i] && p<290) line[p++]=n[i++];
+    } else {
+        int i=0;
+        while(value[i] && p<290){
+            wchar_t c=value[i++];
+            line[p++]=(c>=32 && c<127)?(char)c:'?';
+        }
+    }
+    line[p]=0; Log(line);
+}
 
-    if (!fn(name, 128))
-        return false;
-
-    return wcscmp(name, kAppName) == 0;
+static bool ForegroundName(GetForegroundApplicationFn fn, wchar_t* outName, int cch)
+{
+    if (!fn) return false;
+    ZeroMemory(outName, sizeof(wchar_t)*cch);
+    return fn(outName, cch);
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
@@ -74,94 +87,83 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPWSTR, int)
         return 0;
     }
 
-    Log("===== BobyAudio 0.3 =====");
+    Log("===== BobyAudio 0.4 =====");
     Log("START");
 
-    // Wait until the original shell window exists.
-    bool shellSeen = false;
-    for (int i = 0; i < 60; ++i) {
-        HWND shell = FindWindow(L"VwUserShell", L"VwUserShell");
-        if (!shell)
-            shell = FindWindow(0, L"VwUserShell");
-
-        if (shell) {
-            shellSeen = true;
-            break;
-        }
+    for (int i=0; i<60; ++i) {
+        HWND shell=FindWindow(L"VwUserShell", L"VwUserShell");
+        if (!shell) shell=FindWindow(0, L"VwUserShell");
+        if (shell) break;
         Sleep(1000);
     }
 
-    LogBool("VwUserShell window detected = ", shellSeen);
-
-    HMODULE appCom = LoadLibrary(kDllPath);
+    HMODULE appCom=LoadLibrary(kDllPath);
     if (!appCom) {
-        Log("ERROR: LoadLibrary ACAppCom.dll failed");
+        Log("ERROR: ACAppCom.dll load failed");
         if (singleton) CloseHandle(singleton);
         return 10;
     }
 
-    StartApplicationFn startApplication =
-        reinterpret_cast<StartApplicationFn>(GetProcAddress(appCom, kExportStart));
-    IsApplicationRunningFn isApplicationRunning =
-        reinterpret_cast<IsApplicationRunningFn>(GetProcAddress(appCom, kExportRunning));
-    GetForegroundApplicationFn getForeground =
-        reinterpret_cast<GetForegroundApplicationFn>(GetProcAddress(appCom, kExportForeground));
+    StartApplicationFn startApplication=
+        reinterpret_cast<StartApplicationFn>(GetProcAddress(appCom,kExportStart));
+    IsApplicationRunningFn isRunning=
+        reinterpret_cast<IsApplicationRunningFn>(GetProcAddress(appCom,kExportRunning));
+    GetForegroundApplicationFn getForeground=
+        reinterpret_cast<GetForegroundApplicationFn>(GetProcAddress(appCom,kExportForeground));
 
-    if (!startApplication || !isApplicationRunning) {
+    if (!startApplication || !isRunning || !getForeground) {
         Log("ERROR: required AppCom export missing");
         FreeLibrary(appCom);
         if (singleton) CloseHandle(singleton);
         return 11;
     }
 
-    // Important: this EXE must live in \My Flash Disk\VwUserShell.
-    // AppCom resolves NgAppCom.xml relative to the process/module context.
-    LogBool("AppCom sees VwUserShell = ", isApplicationRunning(L"VwUserShell"));
+    LogBool("AppCom sees VwUserShell = ", isRunning(L"VwUserShell"));
 
-    // Give the stock stack a moment, then wait until the Bluetooth application
-    // is registered/running. The retry loop below still handles late phone/A2DP reconnects.
-    Sleep(8000);
+    // Wait for the Bluetooth application, but do not treat that as A2DP-ready.
+    for (int i=0; i<30 && !isRunning(L"Bluetooth"); ++i)
+        Sleep(1000);
+    LogBool("Bluetooth running = ", isRunning(L"Bluetooth"));
 
-    bool btSeen = false;
-    for (int i = 0; i < 25; ++i) {
-        if (isApplicationRunning(L"Bluetooth")) {
-            btSeen = true;
-            break;
+    // Give the stock stack additional time to finish its reconnect.
+    Sleep(12000);
+
+    const bool bringToForeground=true;
+    bool r=startApplication(kAppName, L"", bringToForeground);
+    LogBool("StartApplication(TRUE) = ", r);
+
+    // Keep this process and ACAppCom loaded and observe what actually happens
+    // for 30 seconds instead of exiting as soon as AppCom reports success.
+    for (int t=0; t<30; ++t) {
+        bool running=isRunning(kAppName);
+        LogBool("MMP running = ", running);
+
+        wchar_t fg[128];
+        bool fgOk=ForegroundName(getForeground, fg, 128);
+        LogBool("Foreground query = ", fgOk);
+        if (fgOk) LogWide("Foreground = ", fg);
+
+        HWND byClass=FindWindow(L"MMPMediaPlayer", 0);
+        HWND byTitle=FindWindow(0, L"MMPMediaPlayer");
+        HWND player=byClass ? byClass : byTitle;
+
+        LogBool("Native MMP window found = ", player != 0);
+        if (player) {
+            LogBool("Native MMP visible = ", IsWindowVisible(player) != FALSE);
+            RECT rc; ZeroMemory(&rc,sizeof(rc));
+            if (GetWindowRect(player,&rc)) {
+                LogInt("MMP left = ", rc.left);
+                LogInt("MMP top = ", rc.top);
+                LogInt("MMP right = ", rc.right);
+                LogInt("MMP bottom = ", rc.bottom);
+            }
         }
+
         Sleep(1000);
     }
-    LogBool("Bluetooth running = ", btSeen);
-
-    const bool bringToForeground = true;
-    bool success = false;
-
-    // Ask the original AppCom layer to launch/show the stock player.
-    // Do not emulate touch and do not send AVRCP Play: the stock player
-    // starts playback by itself after being opened.
-    for (int attempt = 0; attempt < 15; ++attempt) {
-        bool result = startApplication(kAppName, L"", bringToForeground);
-        LogBool("StartApplication(TRUE) = ", result);
-
-        Sleep(2000);
-
-        bool running = isApplicationRunning(kAppName);
-        LogBool("MMPMediaPlayer running = ", running);
-
-        if (running && (!getForeground || IsPlayerForeground(getForeground))) {
-            success = true;
-            Log("SUCCESS: MMPMediaPlayer opened");
-            break;
-        }
-
-        Sleep(2000);
-    }
-
-    if (!success)
-        Log("FAILED: MMPMediaPlayer did not open");
 
     Log("END");
-
     FreeLibrary(appCom);
     if (singleton) CloseHandle(singleton);
-    return success ? 0 : 20;
+    return 0;
 }
