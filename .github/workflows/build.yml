@@ -26,7 +26,8 @@ jobs:
           arm-mingw32ce-g++ \
             -Os -s -static \
             -march=armv5tej -mcpu=arm926ej-s \
-            -mwindows \
+            -mwin32 \
+            -DUNICODE -D_UNICODE -D_WIN32_WCE=0x600 \
             -Wall -Wextra \
             -o dist/BobyAudio.exe BobyAudio.cpp
           cp boby_startup.mscr dist/boby_startup.mscr
