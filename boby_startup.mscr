@@ -1,5 +1,10 @@
-# Boby Audio startup helper
-# Launched by the existing autorunce.mscr
+# Boby Audio startup helper - diagnostic
+WriteFile("\\My Flash Disk\\boby_startup_entered.txt","ENTERED")
+
 If ( FileExists("\\My Flash Disk\\BobyAudio.exe") )
+    WriteFile("\\My Flash Disk\\boby_exe_found.txt","FOUND")
     Run("\\My Flash Disk\\BobyAudio.exe")
+    WriteFile("\\My Flash Disk\\boby_run_called.txt","CALLED")
+Else
+    WriteFile("\\My Flash Disk\\boby_exe_missing.txt","MISSING")
 EndIf
