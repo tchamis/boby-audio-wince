@@ -1,0 +1,102 @@
+name: Build BobyConnect 0.3 for Windows CE ARM
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'BobyConnect.cpp'
+      - 'BobyManualLauncher.cpp'
+      - 'install_bobyconnect_v03.ps1'
+      - 'rollback_handbuch.ps1'
+      - 'use_profileB.ps1'
+      - '.github/workflows/build-bobyconnect.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/enlyze/windows-ce-build-environment-arm:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          arm-mingw32ce-g++ --version
+          arm-mingw32ce-objdump --version
+          ls -1 /opt/mingw32ce/arm-mingw32ce/lib 2>/dev/null | grep -Ei 'winsock|ws2' || true
+
+      - name: Build BobyConnect mapping A
+        shell: bash
+        run: |
+          mkdir -p release
+          COMMON="-Os -s -static -march=armv5tej -mcpu=arm926ej-s -mwin32 -DUNICODE -D_UNICODE -D_WIN32_WCE=0x600 -Wall -Wextra"
+          if arm-mingw32ce-g++ $COMMON -o release/BobyConnect.exe BobyConnect.cpp -lws2; then
+            echo "linked with -lws2"
+          else
+            echo "-lws2 failed, retrying -lwinsock"
+            arm-mingw32ce-g++ $COMMON -o release/BobyConnect.exe BobyConnect.cpp -lwinsock
+          fi
+
+      - name: Build BobyConnect mapping B
+        shell: bash
+        run: |
+          COMMON="-Os -s -static -march=armv5tej -mcpu=arm926ej-s -mwin32 -DUNICODE -D_UNICODE -D_WIN32_WCE=0x600 -Wall -Wextra -DBOBY_MAPPING_B=1 -DBOBY_PROFILE_PAN=15 -DBOBY_PROFILE_A2DP=2 -DBOBY_PROFILE_AVRCP=3"
+          if arm-mingw32ce-g++ $COMMON -o release/BobyConnect_profileB.exe BobyConnect.cpp -lws2; then
+            echo "linked mapping B with -lws2"
+          else
+            arm-mingw32ce-g++ $COMMON -o release/BobyConnect_profileB.exe BobyConnect.cpp -lwinsock
+          fi
+
+      - name: Build VW Handbuch launcher
+        run: |
+          arm-mingw32ce-g++             -Os -s -static             -march=armv5tej -mcpu=arm926ej-s             -mwin32             -DUNICODE -D_UNICODE -D_WIN32_WCE=0x600             -Wall -Wextra             -o release/BobyManualLauncher.exe BobyManualLauncher.cpp
+
+      - name: Package
+        run: |
+          cp install_bobyconnect_v03.ps1 release/
+          cp rollback_handbuch.ps1 release/
+          cp use_profileB.ps1 release/
+          cat > release/README.txt <<'EOF'
+          BOBY CONNECT 0.3
+          ================
+
+          Neu:
+          - PAN wird jetzt ueber nfBT EstablishSLCPairedDeviceAt wirklich angefordert.
+          - A2DP + AVRCP werden zusammen mit PAN angefordert.
+          - TCP 47880 lauscht fuer Boby Maps Bridge.
+          - VW-Menue "Handbuch" startet BobyConnect.
+          - Dein bestehender funktionierender autorunce.mscr wird NICHT geaendert.
+
+          Installation (Garmin als D:):
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\install_bobyconnect_v03.ps1" -Drive D:
+
+          Danach Garmin sauber auswerfen und neu starten.
+
+          Bluetooth Mapping:
+          BobyConnect.exe = Mapping A (PAN 14 / A2DP 1 / AVRCP 2)
+          BobyConnect_profileB.exe = Mapping B (PAN 15 / A2DP 2 / AVRCP 3)
+
+          Mapping B nur benutzen, falls Mapping A auf diesem Firmwarestand keine Profile verbindet:
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\use_profileB.ps1" -Drive D:
+
+          Log auf dem Garmin:
+          D:\BobyConnect\bobyconnect.log
+
+          Handbuch zuruecksetzen:
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\rollback_handbuch.ps1" -Drive D:
+          EOF
+
+      - name: Inspect PE files
+        run: |
+          file release/*.exe || true
+          arm-mingw32ce-objdump -f release/BobyConnect.exe
+          arm-mingw32ce-objdump -p release/BobyConnect.exe | head -n 140
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BobyConnect-v0.3-WinCE-ARM
+          path: release/
