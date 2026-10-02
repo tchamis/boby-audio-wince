@@ -530,15 +530,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
         return 11;
     }
 
-    g_fontSmall = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                              DEFAULT_QUALITY, DEFAULT_PITCH, L"Arial");
-    g_fontMedium = CreateFontW(19, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                               DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                               DEFAULT_QUALITY, DEFAULT_PITCH, L"Arial");
-    g_fontBig = CreateFontW(27, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                            DEFAULT_QUALITY, DEFAULT_PITCH, L"Arial");
+    g_fontSmall = (HFONT)GetStockObject(SYSTEM_FONT);
+    g_fontMedium = g_fontSmall;
+    g_fontBig = g_fontSmall;
 
     HWND b1 = CreateWindowW(L"BUTTON", L"PAN + AUDIO", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                             8, 224, 132, 40, g_hwnd, (HMENU)IDC_CONNECT, hInst, 0);
@@ -571,9 +565,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
     }
 
     if (g_nfbt) FreeLibrary(g_nfbt);
-    if (g_fontSmall) DeleteObject(g_fontSmall);
-    if (g_fontMedium) DeleteObject(g_fontMedium);
-    if (g_fontBig) DeleteObject(g_fontBig);
     LogA("===== BobyConnect END =====");
     return 0;
 }
